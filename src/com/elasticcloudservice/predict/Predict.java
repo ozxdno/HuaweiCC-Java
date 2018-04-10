@@ -56,11 +56,22 @@ public class Predict {
 			}
 		}
 		
+		/*
+		for(int i=0; i<Data.predict.length; i++) {
+			Data.predict[i] = 10;
+		}
+		
 		Data.allocate0.sum();
+		Data.allocate0.setUseMethod_1(true);
+		Data.allocate0.setUseMethod_2(false);
 		Data.allocate0.allocate();
 		Data.allocate0.evaluate();
+		*/
 		
-		return Data.output.saveContentTo();
+		//System.out.println(Data.score1);
+		//System.out.println(Data.score2);
+		//return Data.output.saveContentTo();
+		return new String[] { "1","2","3" };
 		
 		/** =============== end ================ **/
 	}
@@ -458,7 +469,7 @@ class Input {
 					}
 				}
 				if(line.isEmpty()) {
-					this.sortVMTypes();
+					//this.sortVMTypes();
 					part++;
 					partStartRow = row + 1;
 					continue;
@@ -496,6 +507,7 @@ class Input {
 					return false;
 				}
 				if(line.isEmpty()) {
+					this.sortVMTypes();
 					part = part + 1;
 					partStartRow = row + 1;
 					continue;
@@ -1253,9 +1265,18 @@ class Fit4 {
  */
 class Allocate0 {
 	private int minServer;
+	private boolean use1;
+	private boolean use2;
 	
 	public int getMinServer() {
 		return this.minServer;
+	}
+	
+	public void setUseMethod_1(boolean use) {
+		use1 = use;
+	}
+	public void setUseMethod_2(boolean use) {
+		use2 = use;
 	}
 	
 	public Allocate0() {
@@ -1263,13 +1284,41 @@ class Allocate0 {
 	}
 	private void initThis() {
 		minServer = 0;
+		use1 = true;
+		use2 = true;
 	}
 	
 	public boolean allocate() {
 		
-		Allocate1 a1 = new Allocate1();
-		a1.allocate();
-		Data.allocates = a1.getAllocates();
+		if(use2) {
+			Allocate2 a2 = new Allocate2();
+			boolean ok = a2.allocate();
+			Data.allocates = a2.getAllocates();
+			if(ok) {
+				for(Model_Distribution d : a2.getAllocates()) {
+					if(d.getRemain() > 0) {
+						if(!this.adjust(d)) {
+							a2.getAllocates().remove(d);
+						}
+					}
+				}
+				this.refreshPredict();
+				return true;
+			}
+		}
+		
+		if(use1) {
+			Allocate1 a1 = new Allocate1();
+			a1.allocate();
+			Data.allocates = a1.getAllocates();
+			for(Model_Distribution d : Data.allocates) {
+				if(!this.adjust(d)) {
+					Data.allocates.remove(d);
+				}
+			}
+			this.refreshPredict();
+			return true;
+		}
 		
 		return true;
 	}
@@ -1301,6 +1350,99 @@ class Allocate0 {
 				sumRemain += d.getRemainMemory();
 			}
 			Data.score2 = 1 - (double)sumRemain / (double)(allocates.size()*Data.input.getServerMem()*1024);
+		}
+	}
+	public void fill(Model_Distribution d) {
+		for(int i=Data.input.getVMTypeAmount()-1; i>=0; i--) {
+			while(d.isEnough(i)) {
+				d.add(i);
+			}
+		}
+	}
+	public boolean adjust(Model_Distribution d) {
+		int maxCpu = Data.input.getVMTypes().get(Data.input.getVMTypeAmount()-1).getCpu();
+		int maxMem = Data.input.getVMTypes().get(Data.input.getVMTypeAmount()-1).getMemory();
+		int max = Data.input.getOptType() == 1 ? maxCpu : (Data.input.getOptType() == 2 ? maxMem : 0);
+		if(d.getRemain() > max) {
+			int r = Data.input.getOptType() == 1 ? Data.input.getServerCpu() / d.getRemainCpu() :
+				( Data.input.getOptType() == 2 ? Data.input.getServerMem() / d.getRemainMemory() : 100 );
+			if(r <= 2) {
+				return false;
+			}
+			fill(d);
+		}
+		
+		int bestFill = 0;
+		int bestId1 = 0;
+		int bestId2 = 0;
+		
+		for(int i=0; i<Data.input.getVMTypeAmount(); i++) {
+			if( d.getRemain() == bestFill ) {
+				break;
+			}
+			if(d.getAmount(i) == 0) {
+				continue;
+			}
+			for(int j=0; j<Data.input.getVMTypeAmount(); j++) {
+				if(i == j) {
+					continue;
+				}
+				
+				int addCpu = Data.input.getVMTypes().get(j).getCpu();
+				int addMem = Data.input.getVMTypes().get(j).getMemory();
+				int delCpu = Data.input.getVMTypes().get(i).getCpu();
+				int delMem = Data.input.getVMTypes().get(i).getMemory();
+				
+				if(Data.input.getOptType() == 1) {
+					if(addCpu <= delCpu) {
+						continue;
+					}
+				}
+				if(Data.input.getOptType() == 2) {
+					if(addMem <= delMem) {
+						continue;
+					}
+				}
+				
+				int adjCpu = addCpu - delCpu;
+				int adjMem = addMem - delMem;
+				
+				if( adjCpu > d.getRemainCpu() ) {
+					continue;
+				}
+				if( adjMem > d.getRemainMemory() ) {
+					continue;
+				}
+				
+				if( Data.input.getOptType() == 1 ) {
+					if( adjCpu > bestFill ) {
+						bestFill = adjCpu;
+						bestId1 = i;
+						bestId2 = j;
+					}
+				}
+				if( Data.input.getOptType() == 2 ) {
+					if( adjMem > bestFill ) {
+						bestFill = adjMem;
+						bestId1 = i;
+						bestId2 = j;
+					}
+				}
+			}
+		}
+		
+		d.remove(bestId1);
+		d.add(bestId2);
+		return true;
+	}
+	public void refreshPredict() {
+		for(int i=0; i<Data.predict.length; i++) {
+			Data.predict[i] = 0;
+		}
+		for(Model_Distribution d : Data.allocates) {
+			for(int i=0; i<Data.input.getVMTypeAmount(); i++) {
+				Data.predict[i] += d.getAmount(i);
+			}
 		}
 	}
 }
@@ -1348,36 +1490,209 @@ class Allocate1 {
 }
 
 class Allocate2 {
-	private int[] values;
-	private int amount;
+	private List<Model_Distribution> allocates;
+	
+	public List<Model_Distribution> getAllocates() {
+		return this.allocates;
+	}
 	
 	public Allocate2() {
 		initThis();
 	}
 	private void initThis() {
-		if(Data.input.getOptType() == 1) {
-			values = new int[Data.input.getServerCpu()];
-		} 
-		if(Data.input.getOptType() == 2) {
-			values = new int[Data.input.getServerMem()];
+		if(allocates == null) {
+			this.allocates = new ArrayList<Model_Distribution>();
 		}
-		amount = 0;
+		allocates.clear();
 	}
 	
 	public boolean allocate() {
-		for(int i=0; i<Data.input.getVMTypeAmount(); i++) {
-			amount += Data.predict[i];
+		int MAX_ARRAY_SIZE = 10000;
+		int bagContent = 0;
+		int baseMem = 1024; //Data.input.getVMTypes().get(0).getMemory();
+		if(Data.input.getOptType() == 1) {
+			bagContent = Data.input.getServerCpu();
+		}
+		if(Data.input.getOptType() == 2) {
+			bagContent = Data.input.getServerMem() * 1024 / baseMem;
+			/*
+			if(bagContent * 1024 != Data.input.getServerMem()) {
+				return false;
+			}
+			*/
+			for(int i=1; i<Data.input.getVMTypeAmount(); i++) {
+				int n = Data.input.getVMTypes().get(i).getMemory() % baseMem;
+				if(n != 0) {
+					return false;
+				}
+			}
+		}
+		if(bagContent > MAX_ARRAY_SIZE) {
+			return false;
 		}
 		
-		for(int i=0; i<amount; i++) {
-			int cpu = Data.input.getVMTypes().get(i).getCpu();
-			int mem = Data.input.getVMTypes().get(i).getMemory();
+		
+		int[] distribution;
+		int[] remain = Data.predict.clone();
+		while(true) {
+			int sumRemain = 0;
+			for(int n : remain) {
+				sumRemain += n;
+			}
+			if(sumRemain == 0) {
+				break;
+			}
 			
-			for(int j=0; j<Data.predict[i]; j++) {
-				
+			//  DEBUG
+			
+			
+			
+			distribution = bagSolution( remain,bagContent );
+			Model_Distribution d = new Model_Distribution();
+			for(int i=0; i<distribution.length; i++) {
+				for(int j=0; j<distribution[i]; j++) {
+					d.add(i);
+				}
+			}
+			allocates.add(d);
+			
+			for(int i=0; i<remain.length; i++) {
+				remain[i] -= distribution[i];
 			}
 		}
 		
+		
 		return true;
+	}
+	
+	private int[] bagSolution(int[] vmAmount, int bagContent) {
+		
+		int sum = 0;
+		for(int i : vmAmount) {
+			sum += i;
+		}
+		
+		int[][][] distribution = new int[sum][bagContent+1][2];
+		int index = 0;
+		int baseMem = 1024; //Data.input.getVMTypes().get(0).getMemory();
+		int serverCpu = Data.input.getServerCpu();
+		int serverMem = Data.input.getServerMem() * 1024 / baseMem;
+		boolean done = false;
+		int index0 = sum-1;
+		int index1 = bagContent;
+		
+		for(int i=0; i<=bagContent && !done; i++) {
+			if(i == 17) {
+				// DEBUG
+				index = 0;
+			}
+			index = 0;
+			for(int j=vmAmount.length-1; j>=0 && !done; j--) {
+				for(int k=0; k<vmAmount[j] && !done; k++) {
+					
+					if(index == 74) {
+						// DEBUG
+						index = 74;
+					}
+					
+					int cpu = Data.input.getVMTypes().get(j).getCpu();
+					int mem =  Data.input.getVMTypes().get(j).getMemory() / baseMem;
+					
+					if(Data.input.getOptType() == 1) {
+						int v1 = index >= 1 ? distribution[index-1][i][0] : 0;
+						int v2 = 0;
+						int v21 = (index >= 1 && i >= cpu) ? distribution[index-1][i-cpu][0] : 0;
+						int v22 = (index >= 1 && i >= cpu) ? distribution[index-1][i-cpu][1] : 0;
+						if(v21 + cpu <= i && v22 + mem <= serverMem) {
+							v2 = v21 + cpu;
+						}
+						if( v2 > v1 ) {
+							distribution[index][i][0] = v21 + cpu;
+							distribution[index][i][1] = v22 + mem;
+						} else {
+							distribution[index][i][0] = index >= 1 ? distribution[index-1][i][0] : 0;
+							distribution[index][i][1] = index >= 1 ? distribution[index-1][i][1] : 0;
+						}
+						
+						done = distribution[index][i][0] == serverCpu;
+						if(done) {
+							index0 = index;
+							index1 = i;
+						}
+						index++;
+					}
+					if(Data.input.getOptType() == 2) {
+						int v1 = index >= 1 ? distribution[index-1][i][1] : 0;
+						int v2 = 0;
+						int v21 = (index >= 1 && i >= mem) ? distribution[index-1][i-mem][0] : 0;
+						int v22 = (index >= 1 && i >= mem) ? distribution[index-1][i-mem][1] : 0;
+						if(v21 + cpu <= serverCpu && v22 + mem <= i) {
+							v2 = v22 + mem;
+						} else {
+							// DEBUG
+							v2 = 0;
+						}
+						if( v2 > v1 ) {
+							distribution[index][i][0] = v21 + cpu;
+							distribution[index][i][1] = v22 + mem;
+						} else {
+							distribution[index][i][0] = index >= 1 ? distribution[index-1][i][0] : 0;
+							distribution[index][i][1] = index >= 1 ? distribution[index-1][i][1] : 0;
+						}
+						
+						done = distribution[index][i][1] == serverMem;
+						if(done) {
+							index0 = index;
+							index1 = i;
+						}
+						index++;
+					}
+				}
+			}
+		}
+		
+		int[] select = new int[vmAmount.length];
+		for(int i=0; i<select.length; i++) {
+			select[i] = 0;
+		}
+		
+		int opt = Data.input.getOptType() - 1;
+		int content = distribution[index0][index1][opt];
+		while(index0 >=0 && index1 >= 0) {
+			if(index0 == 0 && content == 0) {
+				break;
+			}
+			if(index0 >= 1 && distribution[index0][index1][opt] == distribution[index0-1][index1][opt]) {
+				index0--;
+				continue;
+			}
+			int bg = 0;
+			int ed = 0;
+			int s = 0;
+			for(int i=vmAmount.length-1; i>=0; i--) {
+				bg = ed;
+				ed = bg + vmAmount[i];
+				if(bg <= index0 && index0 < ed) {
+					select[i]++;
+					s = i;
+					break;
+				}
+			}
+			
+			int cpu = Data.input.getVMTypes().get(s).getCpu();
+			int mem = Data.input.getVMTypes().get(s).getMemory() / baseMem;
+			if(Data.input.getOptType() == 1) {
+				index0 -= 1;
+				index1 -= cpu;
+				content -= cpu;
+			}
+			if(Data.input.getOptType() == 2) {
+				index0 -= 1;
+				index1 -= mem;
+				content -= mem;
+			}
+		}
+		
+		return select;
 	}
 }

@@ -6,11 +6,11 @@ import com.filetool.util.LogUtil;
 
 /**
  * 
- * 工具入口
+ * 宸ュ叿鍏ュ彛
  * 
- * @version [版本号, 2017-12-8]
- * @see [相关类/方法]
- * @since [产品/模块版本]
+ * @version [鐗堟湰鍙�, 2017-12-8]
+ * @see [鐩稿叧绫�/鏂规硶]
+ * @since [浜у搧/妯″潡鐗堟湰]
  */
 public class Main {
 	public static void main(String[] args) {
@@ -27,14 +27,14 @@ public class Main {
 
 		LogUtil.printLog("Begin");
 
-		// 读取输入文件
+		// 璇诲彇杈撳叆鏂囦欢
 		String[] ecsContent = FileUtil.read(ecsDataPath, null);
 		String[] inputContent = FileUtil.read(inputFilePath, null);
 
-		// 功能实现入口
+		// 鍔熻兘瀹炵幇鍏ュ彛
 		String[] resultContents = Predict.predictVm(ecsContent, inputContent);
 
-		// 写入输出文件
+		// 鍐欏叆杈撳嚭鏂囦欢
 		if (hasResults(resultContents)) {
 			FileUtil.write(resultFilePath, resultContents, false);
 		} else {
