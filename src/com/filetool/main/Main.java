@@ -34,6 +34,8 @@ public class Main {
 		// 鍔熻兘瀹炵幇鍏ュ彛
 		String[] resultContents = Predict.predictVm(ecsContent, inputContent);
 
+		
+		
 		// 鍐欏叆杈撳嚭鏂囦欢
 		if (hasResults(resultContents)) {
 			FileUtil.write(resultFilePath, resultContents, false);

@@ -56,22 +56,23 @@ public class Predict {
 			}
 		}
 		
-		/*
+		/* DEBUG
 		for(int i=0; i<Data.predict.length; i++) {
 			Data.predict[i] = 10;
 		}
+		*/
 		
 		Data.allocate0.sum();
 		Data.allocate0.setUseMethod_1(true);
-		Data.allocate0.setUseMethod_2(false);
+		Data.allocate0.setUseMethod_2(true);
+		Data.allocate0.setNeedAdjust(true);
 		Data.allocate0.allocate();
 		Data.allocate0.evaluate();
-		*/
 		
-		//System.out.println(Data.score1);
-		//System.out.println(Data.score2);
-		//return Data.output.saveContentTo();
-		return new String[] { "1","2","3" };
+		
+		System.out.println(Data.score1);
+		System.out.println(Data.score2);
+		return Data.output.saveContentTo();
 		
 		/** =============== end ================ **/
 	}
@@ -1267,6 +1268,7 @@ class Allocate0 {
 	private int minServer;
 	private boolean use1;
 	private boolean use2;
+	private boolean needAdjust;
 	
 	public int getMinServer() {
 		return this.minServer;
@@ -1278,6 +1280,9 @@ class Allocate0 {
 	public void setUseMethod_2(boolean use) {
 		use2 = use;
 	}
+	public void setNeedAdjust(boolean need) {
+		this.needAdjust = need;
+	}
 	
 	public Allocate0() {
 		initThis();
@@ -1286,6 +1291,7 @@ class Allocate0 {
 		minServer = 0;
 		use1 = true;
 		use2 = true;
+		needAdjust = true;
 	}
 	
 	public boolean allocate() {
@@ -1295,11 +1301,10 @@ class Allocate0 {
 			boolean ok = a2.allocate();
 			Data.allocates = a2.getAllocates();
 			if(ok) {
-				for(Model_Distribution d : a2.getAllocates()) {
-					if(d.getRemain() > 0) {
-						if(!this.adjust(d)) {
-							a2.getAllocates().remove(d);
-						}
+				for(int i=a2.getAllocates().size()-1; i>=0; i--) {
+					Model_Distribution d = a2.getAllocates().get(i);
+					if(d.getRemain() > 0 && !this.adjust(d)) {
+						a2.getAllocates().remove(d);
 					}
 				}
 				this.refreshPredict();
@@ -1311,8 +1316,9 @@ class Allocate0 {
 			Allocate1 a1 = new Allocate1();
 			a1.allocate();
 			Data.allocates = a1.getAllocates();
-			for(Model_Distribution d : Data.allocates) {
-				if(!this.adjust(d)) {
+			for(int i=Data.allocates.size()-1; i>=0; i--) {
+				Model_Distribution d = Data.allocates.get(i);
+				if(d.getRemain() > 0 && !this.adjust(d)) {
 					Data.allocates.remove(d);
 				}
 			}
@@ -1360,13 +1366,28 @@ class Allocate0 {
 		}
 	}
 	public boolean adjust(Model_Distribution d) {
+		
+		if(!this.needAdjust) {
+			return true;
+		}
+		
 		int maxCpu = Data.input.getVMTypes().get(Data.input.getVMTypeAmount()-1).getCpu();
 		int maxMem = Data.input.getVMTypes().get(Data.input.getVMTypeAmount()-1).getMemory();
 		int max = Data.input.getOptType() == 1 ? maxCpu : (Data.input.getOptType() == 2 ? maxMem : 0);
 		if(d.getRemain() > max) {
 			int r = Data.input.getOptType() == 1 ? Data.input.getServerCpu() / d.getRemainCpu() :
 				( Data.input.getOptType() == 2 ? Data.input.getServerMem() / d.getRemainMemory() : 100 );
-			if(r <= 2) {
+			int sd = 0;
+			for(int i=0; i<Data.input.getVMTypeAmount(); i++) {
+				sd += d.getAmount(i);
+			}
+			int sp = 0;
+			for(int i : Data.predict) {
+				sp += i;
+			}
+			int s = sp / sd;
+			
+			if(r <= 2 && s >= 20) {
 				return false;
 			}
 			fill(d);
