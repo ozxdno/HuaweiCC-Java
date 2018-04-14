@@ -64,7 +64,7 @@ public class Predict {
 		
 		Data.allocate0.sum();
 		Data.allocate0.setUseMethod_1(true);
-		Data.allocate0.setUseMethod_2(true);
+		Data.allocate0.setUseMethod_2(false);
 		Data.allocate0.setNeedAdjust(true);
 		Data.allocate0.allocate();
 		Data.allocate0.evaluate();
@@ -567,6 +567,13 @@ class Input {
 						this.vmTypes.set(j, this.vmTypes.get(j+1));
 						this.vmTypes.set(j+1, temp);
 					}
+					if(this.vmTypes.get(j).getCpu() == this.vmTypes.get(j+1).getCpu()) {
+						if(this.vmTypes.get(j).getMemory() > this.vmTypes.get(j+1).getMemory()) {
+							Model_VM temp = this.vmTypes.get(j);
+							this.vmTypes.set(j, this.vmTypes.get(j+1));
+							this.vmTypes.set(j+1, temp);
+						}
+					}
 				}
 			}
 		}
@@ -577,6 +584,13 @@ class Input {
 						Model_VM temp = this.vmTypes.get(j);
 						this.vmTypes.set(j, this.vmTypes.get(j+1));
 						this.vmTypes.set(j+1, temp);
+					}
+					if(this.vmTypes.get(j).getMemory() == this.vmTypes.get(j+1).getMemory()) {
+						if(this.vmTypes.get(j).getCpu() > this.vmTypes.get(j+1).getCpu()) {
+							Model_VM temp = this.vmTypes.get(j);
+							this.vmTypes.set(j, this.vmTypes.get(j+1));
+							this.vmTypes.set(j+1, temp);
+						}
 					}
 				}
 			}
